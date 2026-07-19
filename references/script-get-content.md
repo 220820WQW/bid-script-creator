@@ -1,6 +1,6 @@
 # get_content 方法的写入规则
 
-本文件只保留 `get_content` 规则和场景指引。完整真实脚本不要写入本文档，必须按本文档中标注的真实案例路径，直接读取对应的 `examples/*.py` 案例。
+本文件只保留 `get_content` 规则和场景指引。需要参考真实案例时，先进入本文档标注的 `examples/<category>/` 目录，再按目标站点的正文来源、字段补齐方式、附件形态和详情请求方式检索最接近的少量脚本；不在本文档中固定指定单一案例文件。
 
 
 
@@ -13,19 +13,16 @@
 - 返回前使用 `handle_str.completion_url(str(content), params['url'])`。
 - 返回字典使用 `params['title']`、`params['pubTime']`、`params['url']` 和处理后的 `content`。
 
-真实案例：
-
-- 常规 HTML 详情页解析正文：见 `examples/佳木斯大学附属第二医院(1)_招标(1)_1.py`。
+案例目录：`examples/general-cases/`。检索请求普通 HTML 详情页、使用 `BeautifulSoup` 定位正文并调用 `completion_url()` 的案例。
 
 ## HTML特殊情况1：详情页补齐 pubTime
 
 - 如果 `get_list` 中 `pubTime` 为 `None`，必须在 `get_content` 中补齐。
 - 判断方式固定使用 `if params['pubTime'] is None:`。
-- 如果详情页发布时间文本包含其他内容，必须使用 `handle_str.extract_and_validate_dates()` 提取日期。
+- 如果详情页直接提供干净的纯日期、`YYYY-MM-DD HH:MM` 或 `YYYY-MM-DD HH:MM:SS`，必须原样提取，不要额外处理，也不必刻意构造或删除时、分、秒。
+- 如果详情页发布时间文本包含 `发布时间：`、栏目名、来源等额外内容，必须使用 `handle_str.extract_and_validate_dates()` 提取其中的纯日期。
 
-真实案例：
-
-- 列表页 `pubTime: None`，详情页补齐发布时间：见 `examples/山西省石楼县人民法院(1)_招标(1)_1.py`。
+案例目录：`examples/content-fill-pubtime/`。检索 `params['pubTime'] is None` 时从详情页补齐发布时间的案例。
 
 ## HTML特殊情况2：get_list 已经提取 content
 
@@ -37,9 +34,7 @@ if params.get('content'):
     return params
 ```
 
-真实案例：
-
-- JSON 列表接口已返回正文内容，`get_content` 直接 `return params`：见 `examples/湖北三峡职业技术学院附属医院(1)_招标(1)_1.py`。
+案例目录：`examples/list-with-content/`。检索 `get_list` 已返回完整 `content`，`get_content` 使用 `if params.get('content'):` 直接返回的案例。
 
 ## HTML特殊情况3：详情页补齐 title
 
@@ -47,9 +42,7 @@ if params.get('content'):
 - 判断方式固定使用 `if params['title'] is None:`。
 - 补齐后仍然返回 `params['title']`。
 
-真实案例：
-
-- 多栏目列表中某个分支返回 `title: None`，详情页补齐标题：见 `examples/湖州市医疗保障局(1)_招标(1)_1.py`。
+案例目录：`examples/content-fill-title/`。检索 `params['title'] is None` 时从详情页补齐标题的案例。
 
 ## HTML特殊情况4：额外附件按抽样结果生成
 
@@ -57,18 +50,20 @@ if params.get('content'):
 - 只有抽样发现 `.pdf`、`.doc`、`.docx`、`.xls`、`.xlsx` 额外附件时，才在 `get_content` 中生成对应附件提取和追加代码。
 - 附件提取必须使用抽样确认的具体 DOM 或 JSON 字段，禁止在未发现附件时生成遍历所有 `<a>` 的猜测性代码。
 
+案例目录：`examples/extra-attachments/`。检索与目标附件 DOM、JSON 字段或附件接口最接近的案例。
+
 ## HTML特殊情况5：正文为内嵌 PDF
 
 - 如果正文通过 `iframe`、`object`、`embed` 展示 PDF，必须从 `src` 或 `data` 等实际属性提取真实 PDF URL，使用 `soup.new_tag('a', href=..., string='内容附件')` 转换为链接并追加到 `content`。
 - 原 `iframe`、`object`、`embed` 标签如果不再有保留价值，可以在追加 `<a>` 后使用 `decompose()` 移除。
-- 真实案例写法参考：`examples/合肥综合性国家科学中心大健康研究院(1)_招标(1)_1.py`。
+- 案例目录：`examples/embedded-content-file/`。检索从 `iframe`、`object` 或 `embed` 属性提取真实文件 URL 并转换为内容附件链接的案例。
 
 ## HTML特殊情况6：PDF URL 存在于 JavaScript
 
 - 必须先使用 BeautifulSoup 定位正文或相关 `script` 标签。只有脚本参数无法用 BeautifulSoup 直接提取时，才允许对该局部内容使用 `re`。
 - 提取 PDF URL 后，使用 `soup.new_tag()` 创建带“内容附件”标识的 `<a>` 标签并追加到 `content`。
 - 如果页面还存在独立附件区，必须同时追加该附件区，不得因已提取 PDF 而忽略其他附件。
-- 真实案例写法参考：`examples/河南经贸职业学院(3)_招标(1)_1.py`。
+- 案例目录：`examples/embedded-content-file/`。检索从局部 JavaScript 调用或脚本字符串中提取 PDF URL，并同时保留独立附件区的案例。
 
 
 
@@ -80,9 +75,7 @@ if params.get('content'):
 - 只有文章详情页URL本身就是 JSON 详情接口时，才直接使用 `params['url']` 请求正文。
 - 如果实际请求正文的是另一个 JSON 详情接口，应新建局部变量 `url` 或使用 `params['detail_url']` 请求详情接口，最终返回结果中的 `url` 仍使用 `params['url']`。
 
-真实案例：
-
-- `get_list` 返回展示详情页 `url` 和 JSON 正文接口 `detail_url`，`get_content` 使用 `params['detail_url']` 请求正文：见 `examples/上海科技馆(1)_招标(1)_1.py`。
+案例目录：`examples/general-cases/`。检索 `get_list` 返回展示页 `url` 和正文接口参数、`get_content` 请求独立 JSON 详情接口的案例。
 
 ## JSON特殊情况2：以表单或载荷形式请求正文接口
 
@@ -102,6 +95,4 @@ if params.get('content'):
     return params
 ```
 
-真实案例：
-
-- JSON 列表接口直接返回 `content`：见 `examples/湖北三峡职业技术学院附属医院(1)_招标(1)_1.py`。
+案例目录：`examples/list-with-content/`。检索 JSON 列表接口直接返回 `content`，`get_content` 不重复请求详情页的案例。

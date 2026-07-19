@@ -1,6 +1,6 @@
 # get_list方法的写入规则
 
-本文件只保留 `get_list` 规则和场景指引。完整真实脚本不要写入本文档，必须按本文档中标注的真实案例路径，直接读取对应的 `examples/*.py` 案例。
+本文件只保留 `get_list` 规则和场景指引。需要参考真实案例时，先进入本文档标注的 `examples/<category>/` 目录，再按目标站点的请求方式、分页规律、响应结构和字段来源检索最接近的少量脚本；不在本文档中固定指定单一案例文件。
 
 ## 请求参数映射
 
@@ -22,9 +22,7 @@
 - 使用 `get_text(strip=True)` 提取标题和发布时间。
 - 每条 `ret_list.append()` 至少返回 `url`、`title`、`pubTime`。
 
-真实案例：
-
-- HTML 基础列表页，并从发布时间文本中提取日期：见 `examples/佳木斯大学附属第二医院(1)_招标(1)_1.py`。
+案例目录：`examples/general-cases/`。检索使用 `BeautifulSoup(resp.text, ...)` 解析普通 HTML 列表，并返回 `url`、`title`、`pubTime` 的案例。
 
 ## HTML特殊情况1：列表页没有发布时间
 
@@ -32,18 +30,14 @@
 - `get_content` 中必须使用 `if params['pubTime'] is None:` 补齐。
 - 不要用空字符串、`''`、`'None'` 作为需要补齐的标记。
 
-真实案例：
-
-- `get_list` 返回 `pubTime: None`，详情页补齐发布时间：见 `examples/山西省石楼县人民法院(1)_招标(1)_1.py`。
+案例目录：`examples/content-fill-pubtime/`。检索 `get_list` 返回 `pubTime: None`、`get_content` 补齐发布时间的案例。
 
 ## HTML特殊情况2：发布时间包含其他文本
 
-- 如果 `pubTime` 中包含 `发布时间：`、栏目名、来源等其他文本，必须使用 `handle_str.extract_and_validate_dates()` 提取日期。
-- 如果页面已经直接给出干净日期，不要额外处理。
+- 如果页面已经直接给出干净的纯日期、`YYYY-MM-DD HH:MM` 或 `YYYY-MM-DD HH:MM:SS`，必须原样提取，不要额外处理，也不必刻意构造或删除时、分、秒。
+- 如果 `pubTime` 中包含 `发布时间：`、栏目名、来源等额外文本，必须使用 `handle_str.extract_and_validate_dates()` 提取其中的纯日期。
 
-真实案例：
-
-- 列表页 `pubTime` 使用 `handle_str.extract_and_validate_dates(pubTime)[0]` 清洗：见 `examples/佳木斯大学附属第二医院(1)_招标(1)_1.py`。
+案例目录：`examples/general-cases/`。检索使用 `handle_str.extract_and_validate_dates()` 清洗列表页发布时间文本的案例。
 
 ## HTML特殊情况3：发布时间分散在多个元素
 
@@ -51,7 +45,7 @@
 - 拼接后必须形成可识别的完整日期，例如 `YYYY-mm-dd`。
 - 这类场景没有固定模板，必须根据页面实际元素位置编写。
 
-真实案例：提取发表日期见：`examples/泉州医学高等专科学校(2)_招标(1)_1.py`
+案例目录：`examples/pubtime-composed/`。检索从多个元素或字段分别提取年、月、日并拼接 `pubTime` 的案例。
 
 ## HTML特殊情况4：多个栏目列表结构不一致
 
@@ -63,9 +57,7 @@
 - 每个分支内部仍然必须保持简短清晰，并且每条 `ret_list.append()` 至少返回 `url`、`title`、`pubTime`。
 - 无论哪个分支，`url` 都必须在 `get_list` 中生成为绝对 URL，并且必须使用 `is_same_origin_url()` 校验其与用户给出的目录网站 URL 同源。
 
-真实案例：
-
-- 多栏目接口返回 HTML，按顶层 `t` 分支解析不同列表结构，并在其中一个分支返回 `title: None`：见 `examples/湖州市医疗保障局(1)_招标(1)_1.py`。
+案例目录：`examples/multi-layout-branch/`。检索使用顶层 `t` 区分多个 HTML 列表结构，并分别返回统一字段的案例。
 
 
 
@@ -79,16 +71,15 @@
 
 如果详情页正文请求依赖接口返回的 `id`、`articleId`、`projectId`、`noticeId`、`categoryId`、`detailUrl` 等参数，必须一并返回给 `get_content` 使用。
 
-真实案例：
-
-- JSON 列表返回 `id`，`get_list` 生成展示详情页 `url`，同时返回 `detail_url` 给 `get_content` 请求正文接口：见 `examples/上海科技馆(1)_招标(1)_1.py`。
+案例目录：`examples/general-cases/`。检索 JSON 列表返回 ID 或详情路径、`get_list` 同时生成展示页 `url` 和正文接口参数的案例。
 
 ## JSON特殊情况2：接口返回时间戳
 
-- 接口返回的日期是毫秒级时间戳时，使用 `handle_str.time_stamp(int(pubTime))` 转成 `YYYY-mm-dd`。
+- 接口返回的日期是毫秒级时间戳时，使用 `handle_str.time_stamp(int(pubTime))` 转成 `YYYY-mm-dd HH:MM:SS`。
 - 接口返回的日期是秒级时间戳时，必须先乘以 1000，再使用 `handle_str.time_stamp(int(pubTime) * 1000)`。
+- 保留 `time_stamp()` 返回的日期时间，不得强制截断为纯日期。
 - 不要添加额外异常判断，按接口实际返回格式直接转换。
-- 真实案例：接口返回时间戳见：`examples/烟台市博物馆(1)_招标(1)_1.py`
+- 案例目录：`examples/general-cases/`。检索使用 `handle_str.time_stamp()` 转换毫秒或秒级时间戳的案例。
 
 ## JSON特殊情况3：多个栏目接口结构不一致
 
@@ -102,9 +93,7 @@
 - 无论哪个分支，`url` 都必须在 `get_list` 中生成。
 - GET 接口分页也可以使用顶层 `t`，随 `start_urls` 一起传入，例如：`{'url': p['url'].format(index), 't': p['t']}`。
 
-真实案例：
-
-- 多栏目接口返回 HTML 并使用顶层 `t` 分支：见 `examples/湖州市医疗保障局(1)_招标(1)_1.py`。
+案例目录：`examples/multi-layout-branch/`。检索使用顶层 `t` 区分不同 JSON 字段、详情 URL 拼接方式或栏目结构的案例。
 
 ## JSON特殊情况4：列表接口已包含正文 content
 
@@ -113,6 +102,4 @@
 - 后续 `get_content` 中可使用 `if params.get('content'):` 判断，命中后可直接 `return params`，也可显式构造结果；只要返回字典包含 `title`、`pubTime`、`url`、`content` 四个必需字段即可。
 - 这种情况下 `get_list` 返回字典必须已经包含 `url`、`title`、`pubTime`、`content`。
 
-真实案例：
-
-- JSON 列表接口直接返回 `content` 的数据来源可参考 `examples/湖北三峡职业技术学院附属医院(1)_招标(1)_1.py`，但 `get_content` 的返回方式必须以 `references/script-get-content.md` 为准。
+案例目录：`examples/list-with-content/`。检索列表接口直接包含 `content`，并在 `get_list` 返回 `url`、`title`、`pubTime`、`content` 的案例；`get_content` 的返回方式仍以 `references/script-get-content.md` 为准。

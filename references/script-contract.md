@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
 ## 固定代码区域
 
-### 固定导包区域
+### 固定基础导包
 
 下列为所有脚本必须保留的基础导包。只有站点的加解密、签名、编码或特殊解析实现确有需要时，才允许在此基础上增加最少量的标准库或已安装依赖导包；禁止删除基础导包或增加未使用的导包：
 
@@ -69,7 +69,7 @@ from bbSpider import Spider, request, handle_str
 
 
 
-### 固定公用方法区域
+### 固定公用方法
 
 正常生成脚本时，不要修改这段区域代码，直接复用：
 
@@ -215,8 +215,6 @@ def is_same_origin_url(url_a: str, url_b: str):
     return domain_a == domain_b
 ```
 
-- 此方法只能在 `get_list` 方法中对 详情页的 URL 使用。
-
 
 
 ### completion_url
@@ -239,7 +237,7 @@ def completion_url(text, url):
 ```
 
 - params text：只能是`content`字符串。
-- params url：补全路径的URL链接地址。
+- params url：【硬性规则】必须是同源的URL绝对路径。
 
 
 
@@ -271,15 +269,17 @@ print(t)  # 2025-12-27 10:32:50
 
 ### extract_and_validate_dates
 
-`bbSpider.handle_str.handle_str.extract_and_validate_dates()`：用于从输入的字符串或HTML内容提取日期。
+`bbSpider.handle_str.handle_str.extract_and_validate_dates()`：用于从输入的字符串或 HTML 内容中提取并验证日期。
 
-> **`pubTime` 提取硬性规则：**在本 Skill 生成的采集脚本中，`extract_and_validate_dates()` 只能用于从字符串中提取以下三类仅含年月日的日期格式。月、日允许一位或两位数字：
+> 本 Skill 使用 `extract_and_validate_dates()` 时，该函数只负责提取以下三类仅含年月日的日期格式。月、日允许一位或两位数字：
 >
 > - `2026-07-15`、`2026-7-15`、`2026-7-1`、`2026-07-1`
 > - `2026年07月15日`、`2026年7月15日`、`2026年7月1日`、`2026年07月1日`
 > - `2026.07.15`、`2026.07.1`、`2026.7.15`、`2026.7.1`
 >
-> 暂不考虑带时、分、秒的日期时间。不得使用该方法为 `pubTime` 提取中文大写日期、斜杠日期、纯数字日期、英文日期或其他未列出的格式。即使下方展示的框架函数源码还具备识别其他格式的能力，生成采集脚本时也必须以本条硬性规则为准。
+> 该函数不负责保留时、分、秒，也不用于提取中文大写日期、斜杠日期、纯数字日期、英文日期或其他未列出的格式。即使下方展示的框架函数源码还具备识别其他格式的能力，生成采集脚本时也只使用上述三类提取结果。
+
+该函数的提取能力不等同于 `pubTime` 的全部允许格式。`pubTime` 还可以直接保留不含额外字符的 `YYYY-MM-DD HH:MM` 或 `YYYY-MM-DD HH:MM:SS` 日期时间字符串；只有原始发布时间包含前缀、栏目名、来源等额外字符时，才使用本函数提取其中的纯日期。
 
 ```python
 def extract_and_validate_dates(text):
@@ -367,12 +367,4 @@ def replace_escape(text):
     text = re.sub(re_cover, '', text)
     return text
 ```
-
-- 该方法只能对 `title` 使用。
-
-
-
-
-
-
 

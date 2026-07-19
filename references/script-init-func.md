@@ -4,13 +4,13 @@
 
 ## 基础用写法
 
-真实案例见：`examples/宁蒗彝族自治县人民政府(1)_招标(1)_1.py`
+真实案例见：`examples/general-cases/宁蒗彝族自治县人民政府(1)_招标(1)_1.py`
 
 
 
 ## URL传参
 
-真实案例见：`examples/淮河能源采购网(1)_招标(1)_1.py`
+真实案例见：`examples/general-cases/淮河能源采购网(1)_招标(1)_1.py`
 
 
 
@@ -21,7 +21,7 @@
 - 第一页url：https://www.gdmudgah.cn/h_gdykfsyy/Zhaobiaotoubiao/newslist.shtml
 - 第二页url：https://www.gdmudgah.cn/h_gdykfsyy/Zhaobiaotoubiao/newslist_2.shtml
 
-真实案例，见：`examples/广东医科大学附属东莞第一医院(3)_招标(1)_1.py`
+真实案例，见：`examples/general-cases/广东医科大学附属东莞第一医院(3)_招标(1)_1.py`
 
 
 
@@ -33,7 +33,7 @@
 - 【硬性规则】向 `start_urls` 传入请求参数时，必须使用 `p['data'].copy()`。
 - `data` 是任务字典中统一的请求参数容器，不代表实际 HTTP 请求一定使用 POST 表单。`get_list` 发送请求时必须再按真实请求映射为 GET `params`、POST `data` 或 POST `json`。
 
-真实案例见：`examples/云南云菌科技（集团）有限公司(1)_招标(1)_1.py`
+真实案例见：`examples/general-cases/云南云菌科技（集团）有限公司(1)_招标(1)_1.py`
 
 
 

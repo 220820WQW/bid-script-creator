@@ -4,7 +4,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-
+import re
 
 # region static methods
 def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
@@ -58,19 +58,18 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 招标投标
+            # 公告通知
             {
-                "url": "https://www.gdmudgah.cn/h_gdykfsyy/Zhaobiaotoubiao/newslist_{}.shtml",
-                "page_number": 2,
+                "url": "https://www.tslxx.net/NewsInfoCategory?categoryId=269829,269830,269831&PageInfoId=0",
+                "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                url = p['url'].format(index) if index > 1 else p['url'].replace('_{}', '')
                 cls.start_urls.append(
                     {
-                        'url': url,
+                        'url': p['url'],
                     }
                 )
 
@@ -82,7 +81,7 @@ class CrawlerObject(Spider):
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select('ul.info-list li')
+        rows = soup.select('#ulList_con_25_41 li')
 
         for row in rows:
             a_tag = row.select_one('a')
@@ -102,7 +101,15 @@ class CrawlerObject(Spider):
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.news-content')
+        src = soup.select_one('#smart-body > script').get('src')
+
+        resp = auto_request(url=src, headers=HEADERS, cookies=COOKIES)
+        m = re.search(r"document\.write\('(.*)'\);", resp.text, re.S)
+        text = m.group(1).replace('\\r\\n', '').replace('\\u0027', '"').replace('\\u003e', '>').replace('\\u003c', '<').replace('\\', '').replace('u0026nbsp;',
+                                                                                                                                                  '')
+        soup = BeautifulSoup(text, "html.parser")
+
+        content = soup.select_one('div.w-detail')
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}
