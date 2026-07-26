@@ -4,10 +4,9 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
-# region static methods
+# region fixed methods
 def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
     proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
 
@@ -40,8 +39,6 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
-
-
 # endregion
 
 
@@ -59,64 +56,54 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 项目动态
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
-                'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
-                }
+                "url": "https://www.sinoma-cbmxe.cn/news/3/",
+                "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': p['data'].copy()
+                        'url': p['url'],
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select('#c_new_list_201_P_066-1754442818507 div.p_list > div.cbox-2.p_loopitem')
 
         for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+            a_tag = row.select_one('p.e_text-15 a')
+            url = urljoin('https://www.sinoma-cbmxe.cn/news/3/', a_tag.get('href'))
+            if not is_same_origin_url(url, 'https://www.sinoma-cbmxe.cn/news/3/'):
+                continue
 
-            title = row.get('newsTitle')
-            pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
-
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            title = handle_str.replace_escape(a_tag.get_text(strip=True)).strip()
+            ret_list.append({'url': url, 'title': title, 'pubTime': None})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
         resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        content = soup.select_one('div.e_richText-74')
+
+        if params['pubTime'] is None:
+            t = soup.select_one('p.e_timeFormat-70')
+            params['pubTime'] = handle_str.extract_and_validate_dates(t.get_text(strip=True))[0]
+
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

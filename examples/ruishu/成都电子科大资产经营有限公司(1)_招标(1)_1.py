@@ -4,6 +4,8 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
+import execjs
+from bbSpider.utils import acquire_subjoin_path
 
 
 # region static methods
@@ -48,6 +50,50 @@ HEADERS = {}
 COOKIES = {}
 
 
+def get_cookies():
+    for _ in range(8):
+        headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Pragma": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+        }
+
+        url = "https://www.id.uestc.edu.cn/index.htm"
+        response = request.get(url, headers=headers, verify=False, proxy_safety='https')
+
+        cookies = dict(response.cookies)
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        content = soup.select_one('meta[id][content]').get('content')
+
+        code = soup.select_one('script').text
+
+        tag = soup.select_one('head script[src]')
+        domain_url = urljoin(url, tag.get('src'))
+        resp = request.get(domain_url, headers=headers, proxy_safety='https')
+        if resp.status_code != 200:
+            continue
+
+        domain = resp.text
+
+        with open(acquire_subjoin_path('成都电子科大资产经营有限公司1.js'), 'rt', encoding='utf-8') as f:
+            js_code = f.read()
+
+        output = execjs.compile(js_code).call('general_cookie', content, code, domain)
+
+        cookies.update(output)
+        if len(cookies) < 2:
+            continue
+
+        return cookies
+    else:
+        return None
+
+
 class CrawlerObject(Spider):
     start_urls = []
     data_category = 0
@@ -58,9 +104,9 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 医院公告
+            # 通知公告
             {
-                "url": "https://www.dtsyyy.cn/tzgg/index.shtml",
+                "url": "https://www.id.uestc.edu.cn/index/tzgg.htm",
                 "page_number": 1,
             },
         )
@@ -76,34 +122,42 @@ class CrawlerObject(Spider):
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
+        cookies = get_cookies()
+        if cookies is None:
+            return ret_list
+
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=cookies)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select('div.notice_expert .header > a')
+        rows = soup.select('div.ywc_listR_bot ul li')
 
         for row in rows:
-            url = urljoin(params['url'], row.get('href'))
+            a_tag = row.select_one('.ywc_listR_botliR a')
+            url = urljoin(params['url'], a_tag.get('href'))
             if not is_same_origin_url(url, params['url']):
                 continue
 
-            title = row.select_one('.content-title').get_text(strip=True)
-            year = row.select_one('.date-year').get_text(strip=True)
-            day = row.select_one('.date-month').get_text(strip=True)
+            title = a_tag.get_text(strip=True)
+            day = row.select_one('.ywc_listR_botliL h1').get_text(strip=True)
+            year = row.select_one('.ywc_listR_botliL h2').get_text(strip=True)
             pubTime = f"{year}-{day}"
-            
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list
 
     def get_content(self, params: dict):
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
+        cookies = get_cookies()
+        if cookies is None:
+            return None
+
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=cookies)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.article-content-body')
+        content = soup.select_one('div.v_news_content')
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

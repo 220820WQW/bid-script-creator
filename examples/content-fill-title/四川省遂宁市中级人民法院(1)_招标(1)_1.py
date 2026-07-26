@@ -86,9 +86,8 @@ class CrawlerObject(Spider):
             if not is_same_origin_url(url, params['url']):
                 continue
 
-            title = a_tag.get_text(strip=True)
             pubTime = row.select_one('.right').get_text(strip=True)
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
+            ret_list.append({'url': url, 'title': None, 'pubTime': pubTime})
 
         return ret_list
 
@@ -99,8 +98,10 @@ class CrawlerObject(Spider):
 
         soup = BeautifulSoup(resp.text, "html.parser")
         content = soup.select_one('div.text')
-
-        params['title'] = soup.select_one('.b_title').get_text(strip=True)
+        
+        if params['title'] is None:
+            params['title'] = soup.select_one('.b_title').get_text(strip=True)
+        
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

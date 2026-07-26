@@ -4,10 +4,9 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
-# region static methods
+# region fixed methods
 def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
     proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
 
@@ -40,12 +39,12 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
-
-
 # endregion
 
 
-HEADERS = {}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+}
 COOKIES = {}
 
 
@@ -61,62 +60,61 @@ class CrawlerObject(Spider):
         payload_list = (
             # 通知公告
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
-                'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
-                }
+                "url": "http://sthjj.huhhot.gov.cn/xwdt/tzgg/",
+                "page_number": 1,
+            },
+            # 拟批准项目公示
+            {
+                "url": "http://sthjj.huhhot.gov.cn/ywgz/hjyxpj/npzxmgs/",
+                "page_number": 1,
+            },
+            # 项目批准公示
+            {
+                "url": "http://sthjj.huhhot.gov.cn/ywgz/hjyxpj/xmpzgs/",
+                "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': p['data'].copy()
+                        'url': p['url'],
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select('ul.lie > li')
 
         for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+            a_tag = row.select_one('a')
+            url = urljoin(params['url'], a_tag.get('href'))
+            if not is_same_origin_url(url, params['url']):
+                continue
 
-            title = row.get('newsTitle')
-            pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
-
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            pubTime = row.select_one('span').get_text(strip=True)
+            ret_list.append({'url': url, 'title': None, 'pubTime': pubTime})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
         resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        content = soup.select_one('#Zoom .TRS_UEDITOR')
+
+        if params['title'] is None:
+            params['title'] = soup.select_one('.tyxl_main_hd h1').get_text(strip=True)
+
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

@@ -85,8 +85,8 @@ class CrawlerObject(Spider):
             title = row.select_one('h3').get_text(strip=True)
             days = row.select_one('.mouth').get_text(strip=True)
             year = row.select_one('.year').get_text(strip=True)
-
             pubTime = f"{year}-{days}"
+            
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list

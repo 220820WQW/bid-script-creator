@@ -4,10 +4,9 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
-# region static methods
+# region fixed methods
 def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
     proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
 
@@ -40,8 +39,6 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
-
-
 # endregion
 
 
@@ -59,64 +56,69 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 通知通告
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
-                'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
+                "url": "http://ahzd.stats.gov.cn/ahdcweb/web/upGrade/columnIfmList",
+                "page_number": 1,
+                "data": {
+                    "strId": "d0abcda920e940ea8aff5b958ebb3af5",
+                    "intCurPage": 1,
+                    "intPageSize": 15
                 }
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
+                data = p['data'].copy()
+                data['intCurPage'] = index
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': p['data'].copy()
+                        'url': p['url'], 'data': data
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, json=params['data'])
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        rows = resp.json().get('map').get('dataList')
 
         for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+            id = row.get('strId')
+            if row.get('strEditType') == 'url':
+                url = urljoin(
+                    "http://ahzd.stats.gov.cn/#/news/index3?id=d0abcda920e940ea8aff5b958ebb3af5&strType=1&menuType=1",
+                    row.get('strHtmlUrl')
+                )
+            else:
+                url = urljoin(
+                    "http://ahzd.stats.gov.cn/#/news/index3?id=d0abcda920e940ea8aff5b958ebb3af5&strType=1&menuType=1",
+                    f"/#/details?id={id}"
+                )
+            if not is_same_origin_url(url, "http://ahzd.stats.gov.cn/#/news/index3?id=d0abcda920e940ea8aff5b958ebb3af5&strType=1&menuType=1"):
+                continue
 
-            title = row.get('newsTitle')
-            pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
-
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            title = row.get('strMasTitle')
+            pubTime = row.get('strPubDate')
+            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'id': id})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
+        resp = auto_request(
+            url="http://ahzd.stats.gov.cn/ahdcweb/web/upGrade/view",
+            headers=HEADERS,
+            cookies=COOKIES,
+            json={"strId": params['id']}
+        )
         if 400 <= resp.status_code <= 599:
             return None
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        content = resp.json().get('map').get('info').get('strContent')
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

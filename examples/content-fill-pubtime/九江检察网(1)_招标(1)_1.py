@@ -1,10 +1,10 @@
 # -*- coding: UTF-8 -*-
+import re
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
 # region static methods
@@ -59,67 +59,64 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 九检公告
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
-                'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
-                }
+                "url": "https://www.jiujiang.jcy.gov.cn/jjgg/",
+                "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': p['data'].copy()
+                        'url': p['url'],
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select('a.lm14')
 
-        for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+        for a_tag in rows:
+            url = urljoin(params['url'], a_tag.get('href'))
+            if not is_same_origin_url(url, params['url']):
+                continue
 
-            title = row.get('newsTitle')
-            pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
-
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            title = handle_str.replace_escape(a_tag.get_text(strip=True)).strip()
+            ret_list.append({'url': url, 'title': title, 'pubTime': None})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
         resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
-        content = handle_str.completion_url(str(content), params['url'])
+        content = soup.select_one('td#fontzoom')
 
-        return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}
+        script = soup.find('script', string=lambda text: text and 'file_appendix' in text)
+        if script:
+            match = re.search(r"var file_appendix='(.*?)';", script.string)
+            if match and match.group(1):
+                attachment = BeautifulSoup(match.group(1), "html.parser")
+                content.append(attachment)
+
+        if params['pubTime'] is None:
+            time_tag = soup.select_one('td[height="25"][bgcolor="#F5F5F5"]')
+            params['pubTime'] = handle_str.extract_and_validate_dates(time_tag.get_text(strip=True))[0]
+
+        content = handle_str.completion_url(str(content), params['url'])
+        title = handle_str.replace_escape(params['title']).strip()
+
+        return {"title": title, "pubTime": params['pubTime'], "url": params['url'], "content": content}
 
 
 if __name__ == "__main__":

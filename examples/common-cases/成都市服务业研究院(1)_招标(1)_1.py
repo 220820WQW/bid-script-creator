@@ -4,7 +4,6 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
 # region static methods
@@ -29,10 +28,7 @@ def is_same_origin_url(url_a: str, url_b: str):
 
     def _get_domain(url: str):
         hostname = urlparse(url).hostname or ""
-        hostname = hostname.lower()
-        if hostname.startswith('www.'):
-            hostname = hostname[4:]
-        return hostname
+        return hostname.lower().removeprefix("www.")
 
     if _is_attachment(url_a) or _is_attachment(url_b):
         return False
@@ -45,7 +41,19 @@ def is_same_origin_url(url_a: str, url_b: str):
 # endregion
 
 
-HEADERS = {}
+HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Authorization;": "",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Content-Type": "application/json;charset=UTF-8",
+    "Origin": "http://www.crisi.cn",
+    "Pragma": "no-cache",
+    "Referer": "http://www.crisi.cn/",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "lang": "zh-cn"
+}
 COOKIES = {}
 
 
@@ -59,23 +67,31 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
+            # 采购公告
+            {
+                "url": "http://www.crisi.cn/api/OpenApi/WebSite/GetPageModel",
+                "page_number": 1,
+                'data': {
+                    "page": 1,
+                    "limit": 9,
+                    "categoryId": "db452321-60eb-4979-a9ba-d2e6fe7a1d5e",
+                    "fastKey": ""
+                }
+            },
             # 通知公告
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
+                "url": "http://www.crisi.cn/api/OpenApi/WebSite/GetPageModel",
+                "page_number": 1,
                 'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
+                    "page": 1,
+                    "limit": 10,
+                    "categoryId": "53fcbf1d-6063-449c-8151-ade80efc4743"
                 }
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
                 cls.start_urls.append(
                     {
                         'url': p['url'], 'data': p['data'].copy()
@@ -85,38 +101,40 @@ class CrawlerObject(Spider):
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, json=params['data'])
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        obj = resp.json().get('data')
+        rows = obj.get('data')
 
         for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+            articleId = row.get('articleId')
+            url = f'http://www.crisi.cn/#/detail/{articleId}'
 
-            title = row.get('newsTitle')
+            title = row.get('title')
             pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
 
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            detail_url = f'http://www.crisi.cn/api/OpenApi/WebSite/Aggregate/{articleId}'
+            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'detail_url': detail_url})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
+        resp = auto_request(url=params['detail_url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        obj = resp.json().get('data')
+        content = obj.get('contentHtml')
+
+        if attachments := obj.get('attachments'):
+            for attach in attachments:
+                a = attach.get('fileWebPathName')
+                fj_url = f"http://www.crisi.cn/{a}"
+                a_tag = f'<a href="{fj_url}">{attach.get("fullName")}</a>'
+                content += a_tag
+
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

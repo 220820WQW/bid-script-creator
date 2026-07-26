@@ -4,7 +4,6 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from bbSpider import Spider, request, handle_str
-import html
 
 
 # region static methods
@@ -59,67 +58,62 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 公告公示
             {
-                "url": "http://www.hdxzyy.com/website/index/findNewsInfoList.gx",
-                "page_number": 2,
-                'data': {
-                    "typeId": "",
-                    "newsId": "-1",
-                    "category": "2",
-                    "page": "1",
-                    "size": "10"
-                }
+                "url": "https://tjj.pds.gov.cn/channels/14076.html",
+                "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                p['data']['page'] = str(index)
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': p['data'].copy()
+                        'url': p['url'],
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES, data=params['data'])
+        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('data').get('list')
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select('div.nrig > ul > li')
 
         for row in rows:
-            newsId = row.get('newsId')
-            url = f"http://www.hdxzyy.com/classical/tzgg.html?newsId={newsId}"
+            a_tag = row.select_one('a')
+            url = urljoin(params['url'], a_tag.get('href'))
+            if not is_same_origin_url(url, params['url']):
+                continue
 
-            title = row.get('newsTitle')
-            pubTime = row.get('publishTime')
-            pubTime = handle_str.time_stamp(int(pubTime))
-
-            content = row.get('newsContent')
-            content = html.unescape(html.unescape(content))
-            content = handle_str.completion_url(str(content), params['url'])
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            title = a_tag.get('title')
+            if title is not None:
+                title = handle_str.replace_escape(title).strip()
+            pubTime = row.select_one('em').get_text(strip=True)
+            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
         resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
-        content = handle_str.completion_url(str(content), params['url'])
+        content = soup.select_one('div.nr')
+        attachment = soup.select_one('div.file_case')
+        if attachment is not None:
+            content.append(attachment)
 
-        return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}
+        if params['title'] is None:
+            params['title'] = soup.select_one('div.c-tittle').get_text(strip=True)
+
+        content = handle_str.completion_url(str(content), params['url'])
+        title = handle_str.replace_escape(params['title']).strip()
+        return {"title": title, "pubTime": params['pubTime'], "url": params['url'], "content": content}
 
 
 if __name__ == "__main__":

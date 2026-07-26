@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 from bbSpider import Spider, request, handle_str
 
 
-# region static methods
 def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
     proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
 
@@ -28,20 +27,12 @@ def is_same_origin_url(url_a: str, url_b: str):
 
     def _get_domain(url: str):
         hostname = urlparse(url).hostname or ""
-        hostname = hostname.lower()
-        if hostname.startswith('www.'):
-            hostname = hostname[4:]
-        return hostname
+        return hostname.lower().removeprefix("www.")
 
     if _is_attachment(url_a) or _is_attachment(url_b):
         return False
 
-    domain_a = _get_domain(url_a)
-    domain_b = _get_domain(url_b)
-    return domain_a == domain_b
-
-
-# endregion
+    return _get_domain(url_a) == _get_domain(url_b)
 
 
 HEADERS = {}
@@ -58,66 +49,76 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 网站公告
             {
-                "url": "https://www.0539120.com/api/web/article/list",
+                "url": "http://www.bzslndx.cn/list.php?fid=4",
                 "page_number": 1,
-                "data": {
-                    "pageNum": "1",
-                    "pageSize": "10",
-                    "category": "news_2",
-                }
             },
         )
 
         for p in payload_list:
-            for index in range(1, p['page_number'] + 1):
-                data = p['data'].copy()
-                data['pageNum'] = str(index)
+            for index in range(1, p["page_number"] + 1):
                 cls.start_urls.append(
                     {
-                        'url': p['url'], 'data': data
+                        "url": p["url"] if index == 1 else f"{p['url']}&page={index}",
                     }
                 )
 
     def get_list(self, params: dict):
         ret_list = []
 
-        resp = auto_request(url=params['url'], params=params['data'], headers=HEADERS, cookies=COOKIES)
+        resp = auto_request(url=params["url"], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return ret_list
 
-        rows = resp.json().get('rows')
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select("table#list_article tr")
 
         for row in rows:
-            article_id = row.get('articleId')
-            url = f"https://www.0539120.com/#/details?id={article_id}&category={row.get('category')}"
-            if not is_same_origin_url(url, 'https://www.0539120.com/#/news?category=news_2'):
+            a_tag = row.select_one('a[href*="bencandy.php?fid=4&id="]')
+            if not a_tag:
                 continue
 
-            title = row.get('title')
-            pubTime = handle_str.extract_and_validate_dates(row.get('createTime'))[0]
-            
-            content = row.get('content')
-            content = handle_str.completion_url(str(content), url)
-            
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
+            url = urljoin(params["url"], a_tag.get("href"))
+            if not is_same_origin_url(url, params["url"]):
+                continue
+
+            pub_text = row.select_one('span[style*="float:right"]').get_text(strip=True)
+            pubTime = handle_str.extract_and_validate_dates(pub_text)[0]
+
+            ret_list.append(
+                {
+                    "url": url,
+                    "title": None,
+                    "pubTime": pubTime,
+                }
+            )
 
         return ret_list
 
     def get_content(self, params: dict):
-        if params.get('content'):
-            return params
-
-        resp = auto_request(url=params['url'], headers=HEADERS, cookies=COOKIES)
+        resp = auto_request(url=params["url"], headers=HEADERS, cookies=COOKIES)
         if 400 <= resp.status_code <= 599:
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div')
-        content = handle_str.completion_url(str(content), params['url'])
 
-        return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}
+        if params["title"] is None:
+            params["title"] = soup.select_one("div.main_title").get_text(strip=True)
+
+        if params["pubTime"] is None:
+            pub_text = soup.select_one("div.top_about").get_text(" ", strip=True)
+            params["pubTime"] = handle_str.extract_and_validate_dates(pub_text)[0]
+
+        content = soup.select_one("div.content")
+        content = handle_str.completion_url(str(content), params["url"])
+
+        return {
+            "title": params["title"],
+            "pubTime": params["pubTime"],
+            "url": params["url"],
+            "content": content,
+        }
 
 
 if __name__ == "__main__":

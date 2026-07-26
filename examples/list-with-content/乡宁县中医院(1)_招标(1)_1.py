@@ -97,6 +97,7 @@ class CrawlerObject(Spider):
 
             noticeContent = row.get('noticeContent')
             content = handle_str.completion_url(str(noticeContent), params['url'])
+            
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime, 'content': content})
 
         return ret_list
