@@ -24,8 +24,9 @@
 
 ## URL 构造与变量复用
 
-1. 构造详情 URL 和执行同源校验时，优先复用当前作用域中已经存在且语义正确的 URL 变量，避免重复书写较长的 URL 字面量。
-2. `params['url']` 确实是列表页 URL，并且可以作为相对详情链接的补全基准时，优先写成：
+1. URL 补全基准和同源比较基准是两个独立概念：`urljoin()` 的基准必须能够正确补全详情链接；`is_same_origin_url()` 的第二个参数只需属于目标网站域名。不得因为补全基准不适用，就同时认定现有 URL 不能用于同源判断。
+2. 执行同源校验时，必须优先复用当前作用域中已有且可以代表目标网站域名的 URL，包括 `params['url']`、列表页 URL、列表接口 URL或其他现有 URL。由于 `is_same_origin_url()` 只比较去掉 `www.` 后的域名，只要现有 URL 与用户提供的目标网站同域，就直接用于比较，禁止仅为同源判断再创建 `site_url`、`list_url` 等局部变量。
+3. `params['url']` 与目标网站同域，并且也可以作为相对详情链接的补全基准时，优先写成：
 
 ```python
 url = urljoin(params['url'], a_tag.get('href'))
@@ -33,16 +34,17 @@ if not is_same_origin_url(url, params['url']):
     continue
 ```
 
-3. `params['url']` 是列表接口 URL、与用户给出的目录网站 URL 不同，或不能作为正确补全基准时，不得为了简写而错误复用。此时把已经确认的目录网站 URL 保存为语义明确的局部变量，例如 `site_url` 或 `list_url`，并在 `urljoin()` 和 `is_same_origin_url()` 中复用；禁止因此新增全局 URL 常量。
-4. URL 的固定结构已经明确，只需插入 ID、页码、栏目值或其他变量即可得到完整 URL 时，优先直接使用 f-string：
+4. `params['url']` 不能正确补全详情链接时，可以为 `urljoin()` 使用另一个已确认的基准 URL；但只要 `params['url']` 仍与目标网站同域，`is_same_origin_url()` 就继续优先使用 `params['url']`，无需为比较域名单独赋值。
+5. 只有当前作用域不存在任何可用于目标网站同源判断的 URL，或已有 URL 属于不同域名时，才允许新增局部变量作为比较基准。该变量只需写已确认的协议和域名，例如 `site_url = "https://example.com"`，无需复制用户提供的完整栏目路径；禁止为此新增全局 URL 常量。
+6. URL 的固定结构已经明确，只需插入 ID、页码、栏目值或其他变量即可得到完整 URL 时，优先直接使用 f-string：
 
 ```python
 url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 ```
 
-5. 能用一个清晰 f-string 得到完整 URL 时，禁止使用字符串相加、多段括号字符串、`format()`，也不要先构造相对字符串再调用 `urljoin()`。
-6. 只有真实字段可能返回相对路径、根路径或完整 URL，需要遵循 URL 解析与补全语义时，才使用 `urljoin()`；不得为了形式统一而强行改成 f-string。
-7. 很短且只使用一次的 URL 字面量可以直接传入；较长或在同一代码块重复使用的 URL 必须优先复用现有变量，或提取为简短的局部变量。
+7. 能用一个清晰 f-string 得到完整 URL 时，禁止使用字符串相加、多段括号字符串、`format()`，也不要先构造相对字符串再调用 `urljoin()`。
+8. 只有真实字段可能返回相对路径、根路径或完整 URL，需要遵循 URL 解析与补全语义时，才使用 `urljoin()`；不得为了形式统一而强行改成 f-string。
+9. 很短且只使用一次的 URL 字面量可以直接传入；较长或在同一代码块重复使用的 URL 必须优先复用现有变量，或提取为简短的局部变量。
 
 ## HTML基础写法
 
@@ -51,7 +53,7 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 - 使用 `rows = soup.select(...)` 获取列表。
 - 使用 `a_tag = row.select_one('a')` 获取链接元素。
 - 对每个列表项，按“URL 构造与变量复用”生成绝对详情 URL。
-- 紧接着使用 `is_same_origin_url()` 校验同源并过滤附件；优先复用语义正确的变量，不得使用可能不同源的接口 URL 作为比较基准。
+- 紧接着使用 `is_same_origin_url()` 校验同源并过滤附件；按“URL 构造与变量复用”优先使用 `params['url']` 或其他已有的同域 URL，不得仅为同源判断重复创建目标网站 URL 变量。
 - 非同源链接立即 `continue`；只有同源链接才继续提取标题、时间并执行 `ret_list.append()`。
 - 使用 `get_text(strip=True)` 提取标题和发布时间。
 - 每条 `ret_list.append()` 至少返回 `url`、`title`、`pubTime`。
@@ -92,7 +94,7 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 - `get_list` 中允许使用 `if params['t'] == 1:`、`if params['t'] == 2:` 这类分支分别解析。
 - 如果多个栏目的提取规则一致，禁止为了栏目名称不同而添加分支，必须使用统一解析逻辑。
 - 每个分支内部仍然必须保持简短清晰，并且每条 `ret_list.append()` 至少返回 `url`、`title`、`pubTime`。
-- 无论哪个分支，`url` 都必须在 `get_list` 中生成为绝对 URL，并且必须使用 `is_same_origin_url()` 校验其与用户给出的目录网站 URL 同源。
+- 无论哪个分支，`url` 都必须在 `get_list` 中生成为绝对 URL，并且必须使用 `is_same_origin_url()` 校验其与目标网站同源；比较基准优先复用当前作用域已有的同域 URL。
 
 
 
@@ -101,9 +103,9 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 
 ## JSON特殊情况1：url 从接口中提取
 
-1. 接口返回相对路径、根路径或完整 URL 时，使用 `urljoin()` 和语义正确的目录网站 URL 变量补全；接口只返回 ID 等字段且详情 URL 结构固定时，优先使用 f-string 直接生成完整 URL。
-2. 得到完整 URL 后，必须使用 `is_same_origin_url()` 与用户给出的目录网站 URL 校验同源，并优先复用语义正确的现有变量或局部变量。
-3. 接口 URL 只用于请求数据，不得代替用户给出的目录网站 URL 作为同源判断基准。
+1. 接口返回相对路径、根路径或完整 URL 时，使用 `urljoin()` 和能够正确补全详情链接的基准 URL；接口只返回 ID 等字段且详情 URL 结构固定时，优先使用 f-string 直接生成完整 URL。
+2. 得到完整 URL 后，必须使用 `is_same_origin_url()` 校验其与目标网站同源，并优先复用 `params['url']` 或当前作用域其他已有的同域 URL。
+3. 接口 URL 与目标网站同域时可以直接作为同源比较基准，即使它不能作为 `urljoin()` 的补全基准；接口 URL 与目标网站不同域时才不得用于同源比较，并按前述规则使用其他现有 URL 或新增仅含协议和域名的局部变量。
 
 如果详情页正文请求依赖接口返回的 `id`、`articleId`、`projectId`、`noticeId`、`categoryId`、`detailUrl` 等参数，必须一并返回给 `get_content` 使用。
 
@@ -134,4 +136,3 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 - `content` 返回前应按实际情况使用 `handle_str.completion_url(str(content), params['url'])` 补全正文中的相对链接。
 - 后续 `get_content` 中可使用 `if params.get('content'):` 判断，命中后可直接 `return params`，也可显式构造结果；只要返回字典包含 `title`、`pubTime`、`url`、`content` 四个必需字段即可。
 - 这种情况下 `get_list` 返回字典必须已经包含 `url`、`title`、`pubTime`、`content`。
-

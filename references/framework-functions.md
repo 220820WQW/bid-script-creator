@@ -29,7 +29,7 @@
 
 ### is_same_origin_url
 
-判断两个 URL 是否同源，仅对比域名并忽略 `www` 和大小写。固定源码以 `contract.md` 的“固定代码区域”为准，不得在此重新实现。
+判断两个 URL 是否同源，仅对比域名并忽略 `www` 和大小写，不比较协议、端口、路径或查询参数。调用时应优先复用当前作用域已有的目标网站同域 URL；只有没有可用的现有 URL 时才新增比较基准。固定源码以 `contract.md` 的“固定代码区域”为准，不得在此重新实现。
 
 - `url_a`、`url_b`：需要比较的两个绝对 URL。
 - 返回值：同源时为 `True`，否则为 `False`。
@@ -107,4 +107,3 @@ proxies = agent_pool(url)["https"]
 
 - `page_url`：以 `http://` 或 `https://` 开头的绝对 URL。
 - 返回代理字典，例如：`{'http': 'URL', 'https': 'URL'}`。
-
