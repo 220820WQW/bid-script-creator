@@ -25,7 +25,7 @@
 - `**kwargs`：传递 `headers`、`cookies`、`timeout`、`allow_redirects`、`verify`、`proxies` 等参数。
 - 返回值：响应对象。
 
-`get_list`、`get_content` 及全局辅助函数中的 Cookie/Token 初始化、风控握手和请求头生成等前置请求，都必须使用 `auto_request()` 或从 bbSpider 导入的 `request`。
+列表页、列表接口、详情页、正文接口、附件接口及其他业务网络请求必须使用 `auto_request()`。特殊站点的 Cookie/challenge 前置请求按对应 reference 的固定流程执行。
 
 ### is_same_origin_url
 

@@ -29,7 +29,7 @@ from bbSpider.agent_pool import agent_pool
 
 2. 在全局写入以下三个固定函数。
 3. `solve_first_cookie()` 和 `solve_second_cookie()` 必须直接复用，禁止修改。
-4. `get_cookies()` 只允许替换目标首页 URL，不得修改请求顺序、请求参数、Cookie 合并及有效性判断。
+4. `get_cookies()` 只允许替换目标首页 URL；函数内的网络请求必须固定使用从 `bbSpider` 导入的 `request`，禁止改为 `auto_request`，不得修改请求顺序、请求参数、Cookie 合并及有效性判断。
 5. `subprocess` 调用 Node 只用于执行固定加速乐 challenge，是禁止外部命令和外部 JS 运行时规则的加速乐例外。
 
 ```python
@@ -187,15 +187,14 @@ headers = HEADERS.copy()
 headers["Cookie"] = cookie_str
 ```
 
-随后使用局部 `headers` 和同一个 `proxies` 发起列表业务请求。
+随后使用 `auto_request`、局部 `headers` 和同一个 `proxies` 发起列表业务请求。
 
-`get_content` 使用相同的 8 次代理与 Cookie 获取流程，但循环失败时返回 `None`。随后使用局部 `headers` 和同一个 `proxies` 发起详情业务请求。
+`get_content` 使用相同的 8 次代理与 Cookie 获取流程，但循环失败时返回 `None`。随后使用 `auto_request`、局部 `headers` 和同一个 `proxies` 发起详情业务请求。
 
 `agent_pool(url)` 返回代理字典，必须根据目标 URL 的实际协议选择对应键，禁止固定选择错误协议。
 
 ## 案例与交付
 
-1. 真实案例统一从 `examples/jsl/` 检索，只读取与目标协议、请求方式和数据结构最接近的少量案例。
+1. 参考真实案例统一从 `examples/jsl/` 检索，只读取与目标协议、请求方式和数据结构最接近的少量案例。
 2. 最终仍只交付用户指定的 Python 脚本，不创建额外文件。
 3. 交付时提示用户运行环境必须能够调用 Node.js；不得运行完整采集脚本验证 challenge。
-

@@ -12,8 +12,7 @@
 
 ## 请求参数映射
 
-- 【硬性规则】`get_list` 及其调用的全局辅助函数中，所有网络发包只能使用 `auto_request` 或从 `bbSpider` 导入的 `request`。
-- 【硬性规则】`params` 形参中由 `payload_list` 传入的请求参数必须位于 `params['data']`。
+- `params` 形参中由 `payload_list` 传入的请求参数必须位于 `params['data']`。
 - GET 查询参数：`auto_request(url=params['url'], params=params['data'], ...)`。
 - POST 表单：`auto_request(url=params['url'], data=params['data'], ...)`。
 - POST JSON 载荷：`auto_request(url=params['url'], json=params['data'], ...)`。
@@ -60,33 +59,39 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 - 返回或传递的 `title`、`pubTime` 必须遵守 `references/data-parsing.md` 的最终字段约束。
 
 
-## HTML特殊情况1：列表页没有发布时间
+
+## 特殊情况处理方式
+
+分析列表页数据时可能遇到以下特殊情况，必须按照对应要求编写代码。
+
+
+### 列表页没有发布时间
 
 - 如果列表页没有提供发布日期，或发布日期不完整，则将 `pubTime` 设置为 `None`。
 - `get_content` 中必须使用 `if params['pubTime'] is None:` 补齐。
 - 不要用空字符串、`''`、`'None'` 作为需要补齐的标记。
 
-## HTML特殊情况2：列表标题被截断
+### 列表标题被截断
 
 - 列表标题末尾存在 `...`、`…`、`……` 等省略标记，并经详情页抽样或稳定页面结构确认是长度截断时，必须把 `title` 设置为 `None`，禁止返回或自行拼接截断标题。
 - 判断只针对已经确认的尾部截断标记；不得因为标题中间包含省略号就认定标题不完整，也不得把真实标题自带的尾部省略号误判为截断。
 - `get_content` 必须使用 `if params['title'] is None:` 从详情页标题元素或真实详情字段提取完整标题。
 
 
-## HTML特殊情况3：发布时间包含其他文本
+### 发布时间包含其他文本
 
 - 如果页面已经直接给出干净的纯日期、`YYYY-MM-DD HH:MM` 或 `YYYY-MM-DD HH:MM:SS`，必须原样提取，不要额外处理，也不必刻意构造或删除时、分、秒。
 - 如果 `pubTime` 中包含 `发布时间：`、栏目名、来源等额外文本，必须使用 `handle_str.extract_and_validate_dates()` 提取其中的纯日期。
 
 
-## HTML特殊情况4：发布时间分散在多个元素
+### 发布时间分散在多个元素
 
 - 如果日期分散在多个元素中，例如年/月在一个元素、日在另一个元素，可以分别提取后拼接。
 - 拼接后必须形成可识别的完整日期，例如 `YYYY-mm-dd`。
 - 这类场景没有固定模板，必须根据页面实际元素位置编写。
 
 
-## HTML特殊情况5：多个栏目列表结构不一致
+### 多个栏目列表结构不一致
 
 - 如果多个栏目共用 `get_list`，但列表页 HTML 结构、详情URL拼接方式、标题位置、发布时间位置等不一致，可以在 `payload_list` 中为每个栏目增加顶层 `t` 字段区分类型。
 - 栏目类型区分字段必须只能使用顶层 `t`，禁止使用顶层 `type`、`category`、`kind`、`column` 等其他字段名。
@@ -99,9 +104,7 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 
 
 
-
-
-## JSON特殊情况1：url 从接口中提取
+### url 从接口中提取
 
 1. 接口返回相对路径、根路径或完整 URL 时，使用 `urljoin()` 和能够正确补全详情链接的基准 URL；接口只返回 ID 等字段且详情 URL 结构固定时，优先使用 f-string 直接生成完整 URL。
 2. 得到完整 URL 后，必须使用 `is_same_origin_url()` 校验其与目标网站同源，并优先复用 `params['url']` 或当前作用域其他已有的同域 URL。
@@ -110,14 +113,14 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 如果详情页正文请求依赖接口返回的 `id`、`articleId`、`projectId`、`noticeId`、`categoryId`、`detailUrl` 等参数，必须一并返回给 `get_content` 使用。
 
 
-## JSON特殊情况2：接口返回时间戳
+### 接口返回时间戳
 
 - 接口返回的日期是毫秒级时间戳时，使用 `handle_str.time_stamp(int(pubTime))` 转成 `YYYY-mm-dd HH:MM:SS`。
 - 接口返回的日期是秒级时间戳时，必须先乘以 1000，再使用 `handle_str.time_stamp(int(pubTime) * 1000)`。
 - 保留 `time_stamp()` 返回的日期时间，不得强制截断为纯日期。
 - 不要添加额外异常判断，按接口实际返回格式直接转换。
 
-## JSON特殊情况3：多个栏目接口结构不一致
+### 多个栏目接口结构不一致
 
 - 如果多个栏目共用 `get_list`，但接口返回字段、详情URL拼接方式、标题字段、发布时间字段等不一致，可以在 `payload_list` 中为每个栏目增加顶层 `t` 字段区分类型。
 - 栏目类型区分字段必须只能使用顶层 `t`，禁止使用顶层 `type`、`category`、`kind`、`column` 等其他字段名。
@@ -130,7 +133,7 @@ url = f"https://example.com/detail?id={article_id}&type={notice_type}"
 - GET 接口分页也可以使用顶层 `t`，随 `start_urls` 一起传入，例如：`{'url': p['url'].format(index), 't': p['t']}`。
 
 
-## JSON特殊情况4：列表接口已包含正文 content
+### 列表接口已包含正文 content
 
 - 如果接口列表中已经包含正文内容，可以在 `get_list` 返回中带上 `content`。
 - `content` 返回前应按实际情况使用 `handle_str.completion_url(str(content), params['url'])` 补全正文中的相对链接。

@@ -47,7 +47,7 @@ from bbSpider.utils import acquire_subjoin_path
 
 2. 在全局写入固定 `compute_cookie()` 和 `get_cookies()`。
 3. `compute_cookie()` 必须直接复用，固定读取 `acquire_subjoin_path("compute_cookie.js")`，禁止修改文件名、临时文件流程、Node 调用、超时和清理逻辑。
-4. `get_cookies()` 只允许替换能够触发同一 challenge 的首页、栏目页面或接口绝对 URL；优先使用页面 URL，其余结构保持不变。
+4. `get_cookies()` 只允许替换能够触发同一 challenge 的首页、栏目页面或接口绝对 URL；优先使用页面 URL。函数内的网络请求必须固定使用从 `bbSpider` 导入的 `request`，禁止改为 `auto_request` 或调整发包方式，其余结构保持不变。
 5. `subprocess` 调用 Node 只用于执行固定 `compute_cookie.js`，是禁止外部命令和外部 JS 运行时规则的本流程例外。
 
 ```python
@@ -136,7 +136,7 @@ else:
     return ret_list
 ```
 
-随后使用本次 `cookies` 和同一个 `proxies` 发起列表请求。
+随后使用 `auto_request`、本次 `cookies` 和同一个 `proxies` 发起列表业务请求。
 
 `get_content` 在详情请求前固定执行：
 
@@ -150,11 +150,10 @@ else:
     return None
 ```
 
-随后使用本次 `cookies` 和同一个 `proxies` 发起详情请求。上述示例使用 HTTPS；目标为 HTTP 时，两个方法都必须将代理键改为 `"http"`。
+随后使用 `auto_request`、本次 `cookies` 和同一个 `proxies` 发起详情业务请求。上述示例使用 HTTPS；目标为 HTTP 时，两个方法都必须将代理键改为 `"http"`。
 
 ## 案例与交付
 
-1. 真实案例统一从 `examples/acw_sc__v2/` 检索，只读取与目标协议、challenge 入口、请求方式和数据结构最接近的少量案例。
+1. 参考真实案例统一从 `examples/acw_sc__v2/` 检索，只读取与目标协议、challenge 入口、请求方式和数据结构最接近的少量案例。
 2. 最终只交付用户指定的 Python 脚本，不创建 `compute_cookie.js` 或其他额外文件。
 3. 交付时明确提示用户：运行环境需要 Node.js，并需要在 `SubsidiaryDir` 中自行提供固定名称 `compute_cookie.js`。
-

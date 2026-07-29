@@ -24,7 +24,7 @@ import execjs
 from bbSpider.utils import acquire_subjoin_path
 ```
 
-2. 在全局写入固定 `get_cookies()`。函数结构保持不变，只允许替换本节后面列出的两个站点值。
+2. 在全局写入固定 `get_cookies()`。函数结构保持不变，只允许替换本节后面列出的两个站点值；函数内的网络请求必须固定使用从 `bbSpider` 导入的 `request`，禁止改为 `auto_request` 或调整发包方式。
 3. `execjs` 和本地 JS 文件只用于瑞数 Cookie 计算，是网络请求约束中禁止外部 JS 运行时的唯一例外。
 
 ```python
@@ -97,7 +97,7 @@ if cookies is None:
     return ret_list
 ```
 
-随后把 `cookies` 传给列表请求，不使用空的全局 `COOKIES`。
+随后使用 `auto_request` 发起列表业务请求并传入 `cookies`，不使用空的全局 `COOKIES`。
 
 `get_content` 在详情请求前固定写入：
 
@@ -107,11 +107,10 @@ if cookies is None:
     return None
 ```
 
-随后把 `cookies` 传给详情请求。列表或详情还有独立接口时，也必须按真实请求链使用本次取得的 Cookie。
+随后使用 `auto_request` 发起详情业务请求并传入 `cookies`。列表或详情还有独立接口时，也必须使用 `auto_request` 并按真实请求链传入本次取得的 Cookie。
 
 ## 案例与交付
 
-1. 真实案例统一从 `examples/ruishu/` 检索，只读取与目标请求方式和数据结构最接近的少量案例。
+1. 参考真实案例统一从 `examples/ruishu/` 检索，只读取与目标请求方式和数据结构最接近的少量案例。
 2. 最终只交付用户指定的 Python 脚本，不创建外部 JS 文件。
 3. 交付时明确提示用户：需要在 `SubsidiaryDir` 中自行创建脚本引用的 JS 文件。
-
