@@ -16,9 +16,9 @@ from bs4 import BeautifulSoup
 from bbSpider import Spider, request, handle_str
 
 
-# region fixed methods
-# auto_request(...)
-# is_same_origin_url(...)
+# region fixed public func
+# def auto_request(...)
+# def is_same_origin_url(...)
 # endregion
 
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
 
 
-1. 固定基础导包
+### 固定基础导包
 
 ```python
 from urllib.parse import urljoin, urlparse
@@ -85,32 +85,17 @@ from bbSpider import Spider, request, handle_str
 
 
 
-2. 固定公用方法
+### 固定公共方法
 
 ```python
-# region fixed methods
-def auto_request(
-    url, params=None, data=None, json=None, proxy_safety=None, **kwargs
-):
-    if proxy_safety is None:
-        proxy_safety = urlparse(url).scheme
+# region fixed public func
+def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
+    proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
 
     if data is not None or json is not None:
-        resp = request.post(
-            url,
-            params=params,
-            data=data,
-            json=json,
-            proxy_safety=proxy_safety,
-            **kwargs,
-        )
+        resp = request.post(url, params=params, data=data, json=json, proxy_safety=proxy_safety, **kwargs)
     else:
-        resp = request.get(
-            url,
-            params=params,
-            proxy_safety=proxy_safety,
-            **kwargs,
-        )
+        resp = request.get(url, params=params, proxy_safety=proxy_safety, **kwargs)
 
     resp.encoding = resp.apparent_encoding
     return resp
@@ -139,11 +124,11 @@ def is_same_origin_url(url_a: str, url_b: str):
 # endregion
 ```
 
-上述固定公用方法的前后注释也要加上。
+- 整段代码直接复用（包括注释），禁止修改。
 
 
 
-3. 固定类名、方法名、类成员变量、全局入口
+### 固定类名、方法名、类成员变量、全局入口
 
 上述“基本模板结构”中的 `CrawlerObject` 类名（包括继承的类名）、以下类成员变量、方法名（包括类方法名和实例方法名），以及底部的全局入口都必须直接复用，禁止修改：
 
