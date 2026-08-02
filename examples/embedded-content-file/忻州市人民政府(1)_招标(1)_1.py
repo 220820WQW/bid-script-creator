@@ -1,19 +1,34 @@
 # -*- coding: UTF-8 -*-
+import re
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
-
 from bbSpider import Spider, request, handle_str
 
 
-# region static methods
-def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
-    proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
+# region fixed methods
+def auto_request(
+    url, params=None, data=None, json=None, proxy_safety=None, **kwargs
+):
+    if proxy_safety is None:
+        proxy_safety = urlparse(url).scheme
 
     if data is not None or json is not None:
-        resp = request.post(url, params=params, data=data, json=json, proxy_safety=proxy_safety, **kwargs)
+        resp = request.post(
+            url,
+            params=params,
+            data=data,
+            json=json,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
     else:
-        resp = request.get(url, params=params, proxy_safety=proxy_safety, **kwargs)
+        resp = request.get(
+            url,
+            params=params,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
 
     resp.encoding = resp.apparent_encoding
     return resp
@@ -39,8 +54,6 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
-
-
 # endregion
 
 
@@ -58,20 +71,21 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 公示
+            # 通知公告
             {
-                "url": "http://www.mdgssx.com/xwgk/gs_1",
+                "url": "https://www.sxxz.gov.cn/zwyw/tzgg/",
+                "page_number": 1,
+            },
+            # 意见征集
+            {
+                "url": "https://www.sxxz.gov.cn/hdjl/yjzj/",
                 "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                cls.start_urls.append(
-                    {
-                        'url': p['url'],
-                    }
-                )
+                cls.start_urls.append({'url': p['url']})
 
     def get_list(self, params: dict):
         ret_list = []
@@ -81,7 +95,7 @@ class CrawlerObject(Spider):
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select('ul.infoList li:not(.split)')
+        rows = soup.select('ul.chz-common-text-list-items li')
 
         for row in rows:
             a_tag = row.select_one('a')
@@ -89,8 +103,8 @@ class CrawlerObject(Spider):
             if not is_same_origin_url(url, params['url']):
                 continue
 
-            title = a_tag.get_text(strip=True)
-            pubTime = row.select_one('.date').get_text(strip=True)
+            title = a_tag.get('title').strip()
+            pubTime = row.select_one('span.pubtime').get_text(strip=True)
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list
@@ -101,12 +115,14 @@ class CrawlerObject(Spider):
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.conTxt')
-
-        if pdf_tag := content.select_one('.pdfiswidthequals'):
-            a_tag = soup.new_tag('a', href=pdf_tag.get('data-powerurl'), string='内容附件')
-            content.append(a_tag)
-            pdf_tag.decompose()
+        content = soup.select_one('div.TRS_Editor')
+        if content is None:
+            content = soup.select_one('div.article-body')
+            script = content.select_one('script')
+            pdf_url = re.search(r"pdfurl\s*=\s*['\"]([^'\"]+)", script.get_text()).group(1)
+            content.append(soup.new_tag('a', href=pdf_url, string='内容附件'))
+            script.decompose()
+            content.append(content.find_next_sibling('p'))
 
         content = handle_str.completion_url(str(content), params['url'])
 

@@ -2,17 +2,32 @@
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
-
 from bbSpider import Spider, request, handle_str
-import re
 
-def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
-    proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
+
+# region fixed methods
+def auto_request(
+    url, params=None, data=None, json=None, proxy_safety=None, **kwargs
+):
+    if proxy_safety is None:
+        proxy_safety = urlparse(url).scheme
 
     if data is not None or json is not None:
-        resp = request.post(url, params=params, data=data, json=json, proxy_safety=proxy_safety, **kwargs)
+        resp = request.post(
+            url,
+            params=params,
+            data=data,
+            json=json,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
     else:
-        resp = request.get(url, params=params, proxy_safety=proxy_safety, **kwargs)
+        resp = request.get(
+            url,
+            params=params,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
 
     resp.encoding = resp.apparent_encoding
     return resp
@@ -27,7 +42,10 @@ def is_same_origin_url(url_a: str, url_b: str):
 
     def _get_domain(url: str):
         hostname = urlparse(url).hostname or ""
-        return hostname.lower().removeprefix("www.")
+        hostname = hostname.lower()
+        if hostname.startswith('www.'):
+            hostname = hostname[4:]
+        return hostname
 
     if _is_attachment(url_a) or _is_attachment(url_b):
         return False
@@ -35,6 +53,7 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
+# endregion
 
 
 HEADERS = {}
@@ -51,20 +70,16 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 通知公告
+            # 公司新闻
             {
-                "url": "https://www.sxemc.edu.cn/jwb/tzgg.htm",
+                "url": "https://www.egova.com.cn/news",
                 "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                cls.start_urls.append(
-                    {
-                        'url': p['url'],
-                    }
-                )
+                cls.start_urls.append({'url': p['url']})
 
     def get_list(self, params: dict):
         ret_list = []
@@ -74,18 +89,14 @@ class CrawlerObject(Spider):
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        wrap = soup.select_one('div.txt-list')
-        rows = wrap.select('li') if wrap else []
+        rows = soup.select('.news-list-top-img > a, #nw > li a')
 
-        for row in rows:
-            a_tag = row.select_one('a')
+        for a_tag in rows:
             url = urljoin(params['url'], a_tag.get('href'))
             if not is_same_origin_url(url, params['url']):
                 continue
 
-            title = a_tag.get_text(strip=True)
-            pubTime = row.select_one('span').get_text(strip=True)
-            ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
+            ret_list.append({'url': url, 'title': None, 'pubTime': None})
 
         return ret_list
 
@@ -95,15 +106,14 @@ class CrawlerObject(Spider):
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        content = soup.select_one('.content-in')
 
-        m = re.search(r'showVsbpdfIframe\("(.*?)",', str(content))
-        if m:
-            a_tag = soup.new_tag(name='a', href=m.group(1), string="附件")
-            content.append(a_tag)
+        if params['title'] is None:
+            params['title'] = soup.select_one('.news-top h2').get_text(strip=True)
 
-        if fj_tag := soup.select_one('ul[style="list-style-type:none;"]'):
-            content.append(fj_tag)
+        if params['pubTime'] is None:
+            pub_time = soup.select_one('.news-top h3').get_text(strip=True)
+            params['pubTime'] = handle_str.extract_and_validate_dates(pub_time)[0]
 
         content = handle_str.completion_url(str(content), params['url'])
 

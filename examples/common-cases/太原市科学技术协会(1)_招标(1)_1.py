@@ -58,9 +58,29 @@ class CrawlerObject(Spider):
     @classmethod
     def init_func(cls):
         payload_list = (
-            # 公示
+            # 公告公示
             {
-                "url": "http://www.mdgssx.com/xwgk/gs_1",
+                "url": "https://sxyangqu.gov.cn/gsgg.html",
+                "page_number": 1,
+            },
+            # 人大建议提案结果公开
+            {
+                "url": "https://sxyangqu.gov.cn/rdjytajggk.html",
+                "page_number": 1,
+            },
+            # 政协建议提案结果公开
+            {
+                "url": "https://sxyangqu.gov.cn/zxjytajggk.html",
+                "page_number": 1,
+            },
+            # 养老服务
+            {
+                "url": "https://sxyangqu.gov.cn/ylfw.html",
+                "page_number": 1,
+            },
+            # 社会救助
+            {
+                "url": "https://sxyangqu.gov.cn/shjz.html",
                 "page_number": 1,
             },
         )
@@ -81,16 +101,16 @@ class CrawlerObject(Spider):
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select('ul.infoList li:not(.split)')
+        rows = soup.select('.right992 > ul > li, .box_list > ul > li')
 
         for row in rows:
-            a_tag = row.select_one('a')
+            a_tag = row.select_one('a[href]')
             url = urljoin(params['url'], a_tag.get('href'))
             if not is_same_origin_url(url, params['url']):
                 continue
 
-            title = a_tag.get_text(strip=True)
-            pubTime = row.select_one('.date').get_text(strip=True)
+            title = handle_str.replace_escape(a_tag.get('title')).strip()
+            pubTime = row.select_one('span').get_text(strip=True)
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list
@@ -101,13 +121,7 @@ class CrawlerObject(Spider):
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.conTxt')
-
-        if pdf_tag := content.select_one('.pdfiswidthequals'):
-            a_tag = soup.new_tag('a', href=pdf_tag.get('data-powerurl'), string='内容附件')
-            content.append(a_tag)
-            pdf_tag.decompose()
-
+        content = soup.select_one('div.show > div.info.left')
         content = handle_str.completion_url(str(content), params['url'])
 
         return {"title": params['title'], "pubTime": params['pubTime'], "url": params['url'], "content": content}

@@ -12,6 +12,7 @@
 - `replace_escape()`：移除字符串中的换行、制表和回车字符。
 - `acquire_subjoin_path()`：定位 `SubsidiaryDir` 中的本地附加文件。
 - `agent_pool()`：从 bbSpider 获取代理。
+- `render_page()`：获取 JavaScript 渲染后的页面 HTML。
 
 ### auto_request
 
@@ -107,3 +108,15 @@ proxies = agent_pool(url)["https"]
 
 - `page_url`：以 `http://` 或 `https://` 开头的绝对 URL。
 - 返回代理字典，例如：`{'http': 'URL', 'https': 'URL'}`。
+
+### render_page
+
+`request.render_page(url, sleep_time)` ：获取 JavaScript 渲染后的 HTML 字符串。只用于正文无法从静态 HTML 或接口响应中直接获取、必须通过 JavaScript 渲染为页面 DOM 的情况。
+
+- `url`：页面URL。
+- `sleep_time`：等待时间，固定等待3000秒。
+- 返回值：渲染后的 HTML 字符串，可交给 `BeautifulSoup()` 解析。
+
+```python
+page = request.render_page(url, sleep_time=3000)  # 等待 3000 秒
+```

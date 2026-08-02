@@ -1,20 +1,35 @@
 # -*- coding: UTF-8 -*-
+import json
+from urllib.parse import unquote
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
-
 from bbSpider import Spider, request, handle_str
-import re
 
 
-# region static methods
-def auto_request(url, params=None, data=None, json=None, proxy_safety=None, **kwargs):
-    proxy_safety = urlparse(url).scheme if proxy_safety is None else proxy_safety
+# region fixed methods
+def auto_request(
+    url, params=None, data=None, json=None, proxy_safety=None, **kwargs
+):
+    if proxy_safety is None:
+        proxy_safety = urlparse(url).scheme
 
     if data is not None or json is not None:
-        resp = request.post(url, params=params, data=data, json=json, proxy_safety=proxy_safety, **kwargs)
+        resp = request.post(
+            url,
+            params=params,
+            data=data,
+            json=json,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
     else:
-        resp = request.get(url, params=params, proxy_safety=proxy_safety, **kwargs)
+        resp = request.get(
+            url,
+            params=params,
+            proxy_safety=proxy_safety,
+            **kwargs,
+        )
 
     resp.encoding = resp.apparent_encoding
     return resp
@@ -40,8 +55,6 @@ def is_same_origin_url(url_a: str, url_b: str):
     domain_a = _get_domain(url_a)
     domain_b = _get_domain(url_b)
     return domain_a == domain_b
-
-
 # endregion
 
 
@@ -61,18 +74,14 @@ class CrawlerObject(Spider):
         payload_list = (
             # 通知公告
             {
-                "url": "https://xgb.henetc.edu.cn/tzgg.htm",
+                "url": "https://www.vcit.cn/nr.jsp?_jcp=4_14",
                 "page_number": 1,
             },
         )
 
         for p in payload_list:
             for index in range(1, p['page_number'] + 1):
-                cls.start_urls.append(
-                    {
-                        'url': p['url'],
-                    }
-                )
+                cls.start_urls.append({'url': p['url']})
 
     def get_list(self, params: dict):
         ret_list = []
@@ -82,16 +91,16 @@ class CrawlerObject(Spider):
             return ret_list
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select('div.lm_list ul li')
+        rows = soup.select('div.J_newsResultLine')
 
         for row in rows:
-            a_tag = row.select_one('a')
+            a_tag = row.select_one('td.newsTitle a.word')
             url = urljoin(params['url'], a_tag.get('href'))
             if not is_same_origin_url(url, params['url']):
                 continue
 
             title = a_tag.get_text(strip=True)
-            pubTime = row.select_one('span').get_text(strip=True)
+            pubTime = row.select_one('td.newsCalendar a.word').get_text(strip=True)
             ret_list.append({'url': url, 'title': title, 'pubTime': pubTime})
 
         return ret_list
@@ -102,12 +111,18 @@ class CrawlerObject(Spider):
             return None
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        content = soup.select_one('div.v_news_content')
+        content = soup.select_one('div.richContent')
 
-        m = re.search(r'showVsbpdfIframe\("(.*?)",', str(content))
-        if m:
-            a_tag = soup.new_tag(name='a', href=m.group(1), string="内容附件")
-            content.append(a_tag)
+        for iframe in content.select('div.ue-pdf-viewer iframe'):
+            viewer = iframe.find_parent('div', class_='ue-pdf-viewer')
+            preview_url = urljoin(params['url'], iframe.get('src'))
+            preview_resp = auto_request(url=preview_url, headers=HEADERS, cookies=COOKIES)
+            preview_soup = BeautifulSoup(preview_resp.text, "html.parser")
+            script = preview_soup.find('script', string=lambda text: text and '__INITIAL_STATE__' in text)
+            state = script.string.split('decodeURIComponent("', 1)[1].split('"))', 1)[0]
+            file_url = json.loads(unquote(state))['file']
+            filename = viewer.select_one('[data-wrapped]').get_text(strip=True)
+            viewer.replace_with(soup.new_tag('a', href=file_url, string=filename))
 
         content = handle_str.completion_url(str(content), params['url'])
 

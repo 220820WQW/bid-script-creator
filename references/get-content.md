@@ -91,7 +91,14 @@ if params.get('content'):
 - 提取 PDF URL 后，使用 `soup.new_tag()` 创建带“内容附件”标识的 `<a>` 标签并追加到 `content`。
 - 如果页面还存在独立附件区，必须同时追加该附件区，不得因已提取 PDF 而忽略其他附件。
 
+### 正文来自 JavaScript 渲染
 
+- 只在分析确认正文由 JavaScript 将接口 JSON 渲染为页面 DOM 时，才允许使用 `request.render_page`。
+- 编码前必须完整阅读 `references/framework-functions.md` 的 `render_page` 小节，并从 `examples/render_content/` 中只读取与目标页面渲染链路最接近的少量案例。
+- 按已确认的真实渲染链调用 `request.render_page(url=..., sleep_time=...)`。`sleep_time` 固定设置3000。
+- `render_page` 返回渲染后的 HTML 字符串，可使用 `BeautifulSoup` 解析。
+- 渲染失败时的重试、等待和失败返回方式只按目标站点已验证行为及最接近案例编写，禁止无依据照搬异常捕获或重试逻辑。
+- 除 `request.render_page` 这一已确认的渲染请求外，列表、详情接口、附件接口及其他业务请求仍必须使用 `auto_request`。
 
 ### 正文接口依赖列表页参数
 
